@@ -12,6 +12,17 @@ function App() {
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState('');
 
+  // デバッグ用のuseEffect
+  useEffect(() => {
+    console.log('App component state updated:', {
+      moodText,
+      recommendationsCount: recommendations.length,
+      loading,
+      analysis,
+      error
+    });
+  }, [moodText, recommendations, loading, analysis, error]);
+
   const handleMoodAnalysis = async () => {
     if (!moodText.trim()) {
       setError('Please enter how you\'re feeling');
@@ -20,6 +31,7 @@ function App() {
 
     setLoading(true);
     setError('');
+    console.log('Starting mood analysis for:', moodText);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/recommend/mood`, {
@@ -33,18 +45,39 @@ function App() {
         })
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
       if (!response.ok) {
-        throw new Error('Failed to get recommendations');
+        const errorText = await response.text();
+        console.error('Response not OK:', response.status, errorText);
+        throw new Error(`Failed to get recommendations: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('Received data:', data);
+      
+      // データの検証
+      if (!data.recommendations || !Array.isArray(data.recommendations)) {
+        console.error('Invalid recommendations data:', data.recommendations);
+        throw new Error('Invalid recommendations data received');
+      }
+      
+      if (!data.analysis) {
+        console.error('Missing analysis data:', data);
+        throw new Error('Missing analysis data');
+      }
+
       setRecommendations(data.recommendations);
       setAnalysis(data.analysis);
+      console.log('State updated successfully');
+      
     } catch (err) {
-      setError('Failed to analyze mood. Please try again.');
-      console.error('Error:', err);
+      console.error('Error in handleMoodAnalysis:', err);
+      setError(`Failed to analyze mood: ${err.message}`);
     } finally {
       setLoading(false);
+      console.log('Analysis completed');
     }
   };
 
@@ -99,16 +132,29 @@ function App() {
   };
 
   const formatDuration = (minutes) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    // 安全な処理：minutesが数値でない場合は0として扱う
+    const mins = Math.max(0, parseInt(minutes) || 0);
+    const hours = Math.floor(mins / 60);
+    const remainingMins = mins % 60;
+    return hours > 0 ? `${hours}h ${remainingMins}m` : `${remainingMins}m`;
   };
 
   const getTopItems = (items, limit = 5) => {
-    return Object.entries(items)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, limit)
-      .filter(([,score]) => score > 0.1);
+    // 安全な処理：itemsが存在しない、またはオブジェクトでない場合は空配列を返す
+    if (!items || typeof items !== 'object' || Array.isArray(items)) {
+      console.warn('getTopItems: Invalid items parameter:', items);
+      return [];
+    }
+    
+    try {
+      return Object.entries(items)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, limit)
+        .filter(([,score]) => score > 0.1);
+    } catch (error) {
+      console.error('getTopItems: Error processing items:', error, items);
+      return [];
+    }
   };
 
   return (
@@ -195,22 +241,26 @@ function App() {
                   Detected Emotions
                 </h3>
                 <div className="space-y-2">
-                  {getTopItems(analysis.emotions).map(([emotion, score]) => (
-                    <div key={emotion} className="flex items-center">
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-white capitalize">{emotion}</span>
-                          <span className="text-gray-400 text-sm">{Math.round(score * 100)}%</span>
-                        </div>
-                        <div className="w-full bg-gray-700 rounded-full h-2">
-                          <div 
-                            className={`h-2 rounded-full ${getEmotionColor(emotion)}`}
-                            style={{ width: `${score * 100}%` }}
-                          ></div>
+                  {analysis.emotions && Object.keys(analysis.emotions).length > 0 ? (
+                    getTopItems(analysis.emotions).map(([emotion, score]) => (
+                      <div key={emotion} className="flex items-center">
+                        <div className="flex-1">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-white capitalize">{emotion}</span>
+                            <span className="text-gray-400 text-sm">{Math.round(score * 100)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-700 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full ${getEmotionColor(emotion)}`}
+                              style={{ width: `${score * 100}%` }}
+                            ></div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-gray-400 text-sm">No specific emotions detected</p>
+                  )}
                 </div>
               </div>
 
@@ -221,22 +271,26 @@ function App() {
                   Movie Moods
                 </h3>
                 <div className="space-y-2">
-                  {getTopItems(analysis.detected_moods).map(([mood, score]) => (
-                    <div key={mood} className="flex items-center">
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-white capitalize">{mood.replace('-', ' ')}</span>
-                          <span className="text-gray-400 text-sm">{Math.round(score * 100)}%</span>
-                        </div>
-                        <div className="w-full bg-gray-700 rounded-full h-2">
-                          <div 
-                            className={`h-2 rounded-full ${getMoodColor(mood)}`}
-                            style={{ width: `${score * 100}%` }}
-                          ></div>
+                  {analysis.moods && Object.keys(analysis.moods).length > 0 ? (
+                    getTopItems(analysis.moods).map(([mood, score]) => (
+                      <div key={mood} className="flex items-center">
+                        <div className="flex-1">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-white capitalize">{mood.replace('-', ' ')}</span>
+                            <span className="text-gray-400 text-sm">{Math.round(score * 100)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-700 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full ${getMoodColor(mood)}`}
+                              style={{ width: `${score * 100}%` }}
+                            ></div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-gray-400 text-sm">No specific moods detected</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -253,7 +307,7 @@ function App() {
             )}
 
             {/* Context Analysis */}
-            {analysis.context && (
+            {analysis.context && typeof analysis.context === 'object' && Object.keys(analysis.context).length > 0 && (
               <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Object.entries(analysis.context).map(([key, value]) => (
                   <div key={key} className="text-center">
@@ -270,7 +324,7 @@ function App() {
       )}
 
       {/* Movie Recommendations */}
-      {recommendations.length > 0 && (
+      {recommendations.length > 0 ? (
         <section className="container mx-auto px-6 py-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-white mb-4">
@@ -298,25 +352,25 @@ function App() {
                   </h3>
                   
                   <div className="flex items-center text-gray-400 text-sm mb-3">
-                    <span>{movie.year}</span>
+                    <span>{movie.year || movie.release_date?.split('-')[0] || 'Unknown'}</span>
                     <span className="mx-2">•</span>
                     <Clock className="w-4 h-4 mr-1" />
-                    <span>{formatDuration(movie.duration)}</span>
+                    <span>{formatDuration(movie.duration || 0)}</span>
                   </div>
                   
                   <div className="flex items-center mb-3">
                     <Star className="w-4 h-4 text-yellow-500 mr-1" />
-                    <span className="text-white font-medium">{movie.rating}</span>
+                    <span className="text-white font-medium">{movie.rating || movie.vote_average || 'N/A'}</span>
                     <span className="text-gray-400 ml-2">IMDb</span>
                     <div className="ml-auto">
                       <span className="text-purple-400 text-sm font-medium">
-                        {Math.round(movie.recommendation_score * 100)}% match
+                        {Math.round((movie.recommendation_score || movie.score || 0) * 100)}% match
                       </span>
                     </div>
                   </div>
                   
                   <div className="flex flex-wrap gap-1 mb-4">
-                    {movie.genres.slice(0, 2).map((genre) => (
+                    {movie.genres && Array.isArray(movie.genres) && movie.genres.slice(0, 2).map((genre) => (
                       <span
                         key={genre}
                         className="px-2 py-1 bg-white/20 text-white text-xs rounded-full"
@@ -327,7 +381,7 @@ function App() {
                   </div>
                   
                   <p className="text-gray-300 text-sm mb-4 line-clamp-3">
-                    {movie.description}
+                    {movie.description || movie.overview || 'No description available'}
                   </p>
                   
                   <div className="mb-4">
@@ -336,7 +390,7 @@ function App() {
                       Why this matches:
                     </p>
                     <ul className="text-gray-300 text-xs space-y-1">
-                      {movie.match_reasons.slice(0, 2).map((reason, index) => (
+                      {movie.match_reasons && Array.isArray(movie.match_reasons) && movie.match_reasons.slice(0, 2).map((reason, index) => (
                         <li key={index} className="flex items-start">
                           <span className="text-purple-400 mr-2">•</span>
                           {reason}
@@ -345,7 +399,7 @@ function App() {
                     </ul>
                   </div>
                   
-                  {movie.streaming_services && movie.streaming_services.length > 0 && (
+                  {movie.streaming_services && Array.isArray(movie.streaming_services) && movie.streaming_services.length > 0 && (
                     <div className="border-t border-white/20 pt-4">
                       <p className="text-gray-400 text-xs mb-2">Available on:</p>
                       <div className="flex flex-wrap gap-2">
@@ -363,6 +417,26 @@ function App() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+      ) : analysis && (
+        <section className="container mx-auto px-6 py-8">
+          <div className="text-center">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/20 p-8">
+              <Film className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-white mb-2">No Movies Found</h3>
+              <p className="text-gray-400 mb-4">
+                We couldn't find movies matching your current mood. This might be due to:
+              </p>
+              <ul className="text-gray-400 text-sm space-y-2 text-left max-w-md mx-auto">
+                <li>• Limited movie database access</li>
+                <li>• Specific mood requirements</li>
+                <li>• API service limitations</li>
+              </ul>
+              <p className="text-gray-300 mt-4">
+                Try describing your mood differently or check back later!
+              </p>
+            </div>
           </div>
         </section>
       )}

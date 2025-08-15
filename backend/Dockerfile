@@ -1,6 +1,28 @@
 # Use Python 3.11 slim image
 FROM python:3.11-slim
 
+# Clear ALL proxy and problematic environment variables completely
+ENV HTTP_PROXY=""
+ENV HTTPS_PROXY=""
+ENV http_proxy=""
+ENV https_proxy=""
+ENV NO_PROXY=""
+ENV no_proxy=""
+ENV HTTP_PROXY=""
+ENV HTTPS_PROXY=""
+ENV http_proxy=""
+ENV https_proxy=""
+ENV NO_PROXY=""
+ENV no_proxy=""
+ENV PYTHONPATH=""
+ENV PYTHONUNBUFFERED="1"
+ENV PYTHONDONTWRITEBYTECODE="1"
+ENV PIP_NO_CACHE_DIR="1"
+ENV PIP_DISABLE_PIP_VERSION_CHECK="1"
+
+# Clear any inherited proxy settings
+RUN unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy NO_PROXY no_proxy || true
+
 # Set working directory
 WORKDIR /app
 

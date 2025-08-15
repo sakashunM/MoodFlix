@@ -34,6 +34,8 @@ class MovieData:
     runtime: Optional[int]
     adult: bool
     original_language: str
+    poster_url: Optional[str] = None
+    backdrop_url: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -64,8 +66,8 @@ class TMDbClient:
         self.api_key = config.TMDB_API_KEY
         self.base_url = config.TMDB_BASE_URL
         self.session = requests.Session()
+        # APIキーはクエリパラメータとして渡す（Bearer認証ではない）
         self.session.headers.update({
-            'Authorization': f'Bearer {self.api_key}',
             'accept': 'application/json'
         })
         
@@ -133,6 +135,9 @@ class TMDbClient:
         
         url = f"{self.base_url}/{endpoint}"
         params = params or {}
+        
+        # APIキーをクエリパラメータとして追加
+        params['api_key'] = self.api_key
         
         try:
             response = self.session.get(url, params=params, timeout=10)
@@ -211,7 +216,9 @@ class TMDbClient:
                     popularity=movie_data.get('popularity', 0),
                     runtime=None,  # Not available in search results
                     adult=movie_data.get('adult', False),
-                    original_language=movie_data.get('original_language', '')
+                    original_language=movie_data.get('original_language', ''),
+                    poster_url=config.get_tmdb_image_url(movie_data.get('poster_path')),
+                    backdrop_url=config.get_tmdb_image_url(movie_data.get('backdrop_path'), 'w1280')
                 )
                 movies.append(movie)
             
@@ -252,7 +259,9 @@ class TMDbClient:
                 popularity=data.get('popularity', 0),
                 runtime=data.get('runtime'),
                 adult=data.get('adult', False),
-                original_language=data.get('original_language', '')
+                original_language=data.get('original_language', ''),
+                poster_url=config.get_tmdb_image_url(data.get('poster_path')),
+                backdrop_url=config.get_tmdb_image_url(data.get('backdrop_path'), 'w1280')
             )
             
             # Cache result
@@ -301,7 +310,9 @@ class TMDbClient:
                     popularity=movie_data.get('popularity', 0),
                     runtime=None,
                     adult=movie_data.get('adult', False),
-                    original_language=movie_data.get('original_language', '')
+                    original_language=movie_data.get('original_language', ''),
+                    poster_url=config.get_tmdb_image_url(movie_data.get('poster_path')),
+                    backdrop_url=config.get_tmdb_image_url(movie_data.get('backdrop_path'), 'w1280')
                 )
                 movies.append(movie)
             

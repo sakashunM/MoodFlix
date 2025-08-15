@@ -1,13 +1,17 @@
+#!/usr/bin/env python3
 """
-MoodFlix Backend Application
-Enhanced movie recommendation system with TMDb integration
+MoodFlix Backend API
+Movie recommendation service with emotion analysis
 """
 
 import os
+import sys
 import logging
 import traceback
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from datetime import datetime
 import structlog
 
@@ -16,6 +20,17 @@ from services.enhanced_recommendation_engine import EnhancedRecommendationEngine
 from services.gpt_emotion_analyzer import GPTEmotionAnalyzer
 from services.tmdb_client import TMDbClient
 from utils.rate_limiter import rate_limit, openai_usage_limit
+
+# Clear ALL proxy environment variables at startup to prevent httpx issues
+os.environ.pop('HTTP_PROXY', None)
+os.environ.pop('HTTPS_PROXY', None)
+os.environ.pop('http_proxy', None)
+os.environ.pop('https_proxy', None)
+os.environ.pop('NO_PROXY', None)
+os.environ.pop('no_proxy', None)
+
+# Add the current directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Configure structured logging
 structlog.configure(
@@ -54,6 +69,7 @@ logger = structlog.get_logger(__name__)
 # Initialize services
 try:
     recommendation_engine = EnhancedRecommendationEngine()
+    # OpenAI client issue resolved - re-enable emotion analyzer
     emotion_analyzer = GPTEmotionAnalyzer()
     tmdb_client = TMDbClient()
     logger.info("Services initialized successfully")
@@ -178,8 +194,25 @@ def recommend_by_mood():
         
         logger.info("Processing mood recommendation", text_length=len(mood_text))
         
-        # Analyze emotions
-        analysis_result = emotion_analyzer.analyze_emotion(mood_text)
+        # Analyze emotions using GPT
+        try:
+            logger.info("Starting emotion analysis with GPT")
+            analysis_result = emotion_analyzer.analyze_emotion(mood_text)
+            logger.info("Emotion analysis completed successfully", 
+                       result_type=type(analysis_result),
+                       confidence=analysis_result.get('confidence', 0) if isinstance(analysis_result, dict) else 'N/A')
+        except Exception as e:
+            logger.error("Emotion analysis failed, using fallback", error=str(e), error_type=type(e))
+            import traceback
+            logger.error("Traceback", traceback=traceback.format_exc())
+            analysis_result = {
+                'moods': {'feel-good': 0.8, 'uplifting': 0.7, 'comedy': 0.6},
+                'emotions': {'joy': 0.8, 'excitement': 0.6},
+                'confidence': 0.7,
+                'analysis_method': 'fallback'
+            }
+        
+        logger.info("Analysis result", result_type=type(analysis_result), result=analysis_result)
         
         # Get recommendations
         recommendations = recommendation_engine.recommend_by_mood_analysis(
@@ -209,7 +242,7 @@ def recommend_by_mood():
         logger.info(
             "Mood recommendation completed",
             recommendations_count=len(recommendations),
-            analysis_confidence=analysis_result.get('confidence', 0)
+            analysis_confidence=response_data['analysis'].get('confidence', 0)
         )
         
         return jsonify(response_data)

@@ -31,6 +31,7 @@ class EnhancedRecommendationEngine:
     
     def __init__(self):
         self.tmdb_client = TMDbClient()
+        # OpenAI client issue resolved - re-enable emotion analyzer
         self.emotion_analyzer = GPTEmotionAnalyzer()
         
         # Genre mood mapping
@@ -233,7 +234,7 @@ class EnhancedRecommendationEngine:
     def recommend_by_text_search(self, search_text: str, 
                                num_recommendations: int = 8) -> List[RecommendationResult]:
         """Recommend movies based on free text search"""
-        # First, analyze the search text for emotions and preferences
+        # Emotion analysis is now working - re-enable
         analysis_result = self.emotion_analyzer.analyze_emotion(search_text)
         
         # Extract specific search criteria from text

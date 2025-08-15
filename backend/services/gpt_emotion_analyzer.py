@@ -1,16 +1,45 @@
-import openai
-import json
 import os
+import openai
+import httpx
+import json
 from typing import Dict, List, Tuple
 
 class GPTEmotionAnalyzer:
+    """GPT-4.1-mini based emotion analyzer for movie recommendations"""
+    
     def __init__(self):
         """Initialize the GPT-4.1-mini emotion analyzer"""
+        # Clear proxy environment variables to prevent httpx issues
+        os.environ.pop('HTTP_PROXY', None)
+        os.environ.pop('HTTPS_PROXY', None)
+        os.environ.pop('http_proxy', None)
+        os.environ.pop('https_proxy', None)
+        os.environ.pop('NO_PROXY', None)
+        os.environ.pop('no_proxy', None)
+        
         # OpenAI API key is already set in environment
-        self.client = openai.OpenAI(
-            api_key=os.getenv('OPENAI_API_KEY'),
-            base_url=os.getenv('OPENAI_API_BASE')
+        api_key = os.getenv('OPENAI_API_KEY')
+        base_url = os.getenv('OPENAI_API_BASE')
+        
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+        
+        # Create custom httpx client without any proxy settings
+        # This prevents the 'proxies' parameter error
+        custom_http_client = httpx.Client(
+            timeout=30.0,
+            # No proxies parameter - let httpx handle it internally
         )
+        
+        # Initialize OpenAI client with custom HTTP client
+        self.client = openai.OpenAI(
+            api_key=api_key,
+            http_client=custom_http_client
+        )
+        
+        # Set base URL separately if provided
+        if base_url:
+            self.client.base_url = base_url
         
         # Define mood categories for movie recommendations
         self.mood_categories = [
@@ -30,8 +59,11 @@ class GPTEmotionAnalyzer:
             Dict: Analysis results with emotions and movie moods
         """
         try:
+            print(f"DEBUG: Starting emotion analysis for text: {text}")
+            
             # Create optimized prompt for emotion analysis
             prompt = self._create_analysis_prompt(text)
+            print(f"DEBUG: Created prompt: {prompt[:100]}...")
             
             # Call GPT-4.1-mini API
             response = self.client.chat.completions.create(
@@ -44,19 +76,34 @@ class GPTEmotionAnalyzer:
                 max_tokens=500
             )
             
+            print(f"DEBUG: GPT response received: {response.choices[0].message.content[:100]}...")
+            
             # Parse the response
             result = self._parse_gpt_response(response.choices[0].message.content)
+            print(f"DEBUG: Parsed result type: {type(result)}, value: {result}")
+            
+            # Ensure result is a dictionary
+            if not isinstance(result, dict):
+                print(f"ERROR: Unexpected result type: {type(result)}, value: {result}")
+                result = self._fallback_analysis(text)
+                print(f"DEBUG: Fallback result: {result}")
             
             # Add confidence score
             result['confidence'] = self._calculate_confidence(text, result)
             result['analysis_method'] = 'gpt-4.1-mini'
             
+            print(f"DEBUG: Final result: {result}")
             return result
             
         except Exception as e:
-            print(f"GPT analysis failed: {e}")
+            print(f"ERROR: GPT analysis failed: {e}")
+            print(f"ERROR: Exception type: {type(e)}")
+            import traceback
+            traceback.print_exc()
             # Fallback to basic analysis if GPT fails
-            return self._fallback_analysis(text)
+            fallback_result = self._fallback_analysis(text)
+            print(f"DEBUG: Exception fallback result: {fallback_result}")
+            return fallback_result
     
     def _create_analysis_prompt(self, text: str) -> str:
         """Create optimized prompt for GPT-3.5 Turbo"""
@@ -116,6 +163,13 @@ Return only valid JSON without any additional text.
     def _parse_gpt_response(self, response_text: str) -> Dict:
         """Parse GPT response and extract structured data"""
         try:
+            print(f"DEBUG: _parse_gpt_response called with: {response_text[:100]}...")
+            
+            # Ensure response_text is a string
+            if not isinstance(response_text, str):
+                print(f"ERROR: Unexpected response type: {type(response_text)}")
+                return self._create_fallback_structure()
+            
             # Clean the response text
             response_text = response_text.strip()
             if response_text.startswith('```json'):
@@ -123,8 +177,16 @@ Return only valid JSON without any additional text.
             if response_text.endswith('```'):
                 response_text = response_text[:-3]
             
+            print(f"DEBUG: Cleaned response text: {response_text[:100]}...")
+            
             # Parse JSON
             result = json.loads(response_text)
+            print(f"DEBUG: JSON parsed successfully: {result}")
+            
+            # Ensure result is a dictionary
+            if not isinstance(result, dict):
+                print(f"ERROR: Parsed result is not a dictionary: {type(result)}")
+                return self._create_fallback_structure()
             
             # Validate and normalize the structure
             normalized_result = {
@@ -135,13 +197,23 @@ Return only valid JSON without any additional text.
                 'raw_response': result
             }
             
+            print(f"DEBUG: Normalized result: {normalized_result}")
             return normalized_result
             
         except json.JSONDecodeError as e:
-            print(f"JSON parsing failed: {e}")
-            print(f"Response text: {response_text}")
+            print(f"ERROR: JSON parsing failed: {e}")
+            print(f"ERROR: Response text: {response_text}")
             # Return a basic structure if parsing fails
-            return self._create_fallback_structure()
+            fallback = self._create_fallback_structure()
+            print(f"DEBUG: JSON decode fallback: {fallback}")
+            return fallback
+        except Exception as e:
+            print(f"ERROR: Unexpected error in _parse_gpt_response: {e}")
+            import traceback
+            traceback.print_exc()
+            fallback = self._create_fallback_structure()
+            print(f"DEBUG: General exception fallback: {fallback}")
+            return fallback
     
     def _calculate_confidence(self, text: str, result: Dict) -> float:
         """Calculate confidence score based on analysis quality"""
