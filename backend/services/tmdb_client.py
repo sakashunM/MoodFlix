@@ -88,7 +88,8 @@ class TMDbClient:
         
         # Genre mapping cache
         self.genres_cache = None
-        self._load_genres()
+        # Force reload genres on initialization
+        self._load_genres(force_reload=True)
     
     def _rate_limit(self):
         """Enforce rate limiting"""
@@ -156,29 +157,52 @@ class TMDbClient:
             logger.error(f"TMDb API request failed: {e}")
             raise
     
-    def _load_genres(self):
+    def _load_genres(self, force_reload=False):
         """Load genre mapping"""
         cache_key = "tmdb:genres"
-        cached_genres = self._get_from_cache(cache_key)
         
-        if cached_genres:
-            self.genres_cache = cached_genres
-            return
+        if not force_reload:
+            cached_genres = self._get_from_cache(cache_key)
+            if cached_genres:
+                self.genres_cache = cached_genres
+                logger.info(f"Loaded {len(self.genres_cache)} genres from cache")
+                return
         
         try:
+            logger.info("Loading genres from TMDB API...")
             data = self._make_request('genre/movie/list', {'language': 'ja-JP'})
             self.genres_cache = {genre['id']: genre['name'] for genre in data['genres']}
             self._set_cache(cache_key, self.genres_cache, ttl=7*24*3600)  # Cache for 1 week
-            logger.info(f"Loaded {len(self.genres_cache)} genres")
+            logger.info(f"Loaded {len(self.genres_cache)} genres from API")
+            logger.debug(f"Genre mapping: {self.genres_cache}")
         except Exception as e:
             logger.error(f"Failed to load genres: {e}")
             self.genres_cache = {}
+            # Fallback to basic genre mapping
+            self.genres_cache = {
+                28: "アクション", 12: "アドベンチャー", 16: "アニメーション", 35: "コメディ",
+                80: "犯罪", 99: "ドキュメンタリー", 18: "ドラマ", 10751: "ファミリー",
+                14: "ファンタジー", 36: "歴史", 27: "ホラー", 10402: "ミュージカル",
+                9648: "ミステリー", 10749: "ロマンス", 878: "SF", 10770: "テレビ映画",
+                53: "スリラー", 10752: "戦争", 37: "西部劇"
+            }
+            logger.info("Using fallback genre mapping")
     
     def _map_genres(self, genre_ids: List[int]) -> List[str]:
         """Map genre IDs to names"""
         if not self.genres_cache:
+            logger.warning("No genre cache available")
             return []
-        return [self.genres_cache.get(gid, f"Unknown({gid})") for gid in genre_ids]
+        
+        mapped_genres = []
+        for gid in genre_ids:
+            genre_name = self.genres_cache.get(gid, f"Unknown({gid})")
+            mapped_genres.append(genre_name)
+            if genre_name.startswith("Unknown"):
+                logger.warning(f"Unknown genre ID: {gid}")
+        
+        logger.debug(f"Mapped genres {genre_ids} -> {mapped_genres}")
+        return mapped_genres
     
     def search_movies(self, query: str, **kwargs) -> List[MovieData]:
         """Search for movies"""

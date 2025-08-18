@@ -336,87 +336,105 @@ function App() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {recommendations.map((movie) => (
-              <div
-                key={movie.id}
-                className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border border-white/20 hover:border-purple-500/50 transition-all duration-300 hover:transform hover:scale-105 group"
-              >
-                {/* Movie Poster Placeholder */}
-                <div className="aspect-[2/3] bg-gradient-to-br from-purple-600/20 to-pink-600/20 flex items-center justify-center">
-                  <Film className="w-16 h-16 text-white/50" />
-                </div>
-                
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">
-                    {movie.title}
-                  </h3>
-                  
-                  <div className="flex items-center text-gray-400 text-sm mb-3">
-                    <span>{movie.year || movie.release_date?.split('-')[0] || 'Unknown'}</span>
-                    <span className="mx-2">•</span>
-                    <Clock className="w-4 h-4 mr-1" />
-                    <span>{formatDuration(movie.duration || 0)}</span>
-                  </div>
-                  
-                  <div className="flex items-center mb-3">
-                    <Star className="w-4 h-4 text-yellow-500 mr-1" />
-                    <span className="text-white font-medium">{movie.rating || movie.vote_average || 'N/A'}</span>
-                    <span className="text-gray-400 ml-2">IMDb</span>
-                    <div className="ml-auto">
-                      <span className="text-purple-400 text-sm font-medium">
-                        {Math.round((movie.recommendation_score || movie.score || 0) * 100)}% match
-                      </span>
+            {recommendations.map((item) => {
+              // データ構造を自動判別
+              const movie = item.movie || item;
+              
+              return (
+                <div
+                  key={item.id || movie.id}
+                  className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border border-white/20 hover:border-purple-500/50 transition-all duration-300 hover:transform hover:scale-105 group"
+                >
+                  {/* Movie Poster */}
+                  <div className="aspect-[2/3] relative bg-gradient-to-br from-purple-600/20 to-pink-600/20">
+                    {movie.poster_url ? (
+                      <img 
+                        src={movie.poster_url} 
+                        alt={movie.title || movie.original_title || 'Movie poster'}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div className={`absolute inset-0 flex items-center justify-center ${movie.poster_url ? 'hidden' : 'flex'}`}>
+                      <Film className="w-16 h-16 text-white/50" />
                     </div>
                   </div>
                   
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    {movie.genres && Array.isArray(movie.genres) && movie.genres.slice(0, 2).map((genre) => (
-                      <span
-                        key={genre}
-                        className="px-2 py-1 bg-white/20 text-white text-xs rounded-full"
-                      >
-                        {genre}
-                      </span>
-                    ))}
-                  </div>
-                  
-                  <p className="text-gray-300 text-sm mb-4 line-clamp-3">
-                    {movie.description || movie.overview || 'No description available'}
-                  </p>
-                  
-                  <div className="mb-4">
-                    <p className="text-purple-400 text-sm font-medium mb-2 flex items-center">
-                      <Zap className="w-4 h-4 mr-1" />
-                      Why this matches:
-                    </p>
-                    <ul className="text-gray-300 text-xs space-y-1">
-                      {movie.match_reasons && Array.isArray(movie.match_reasons) && movie.match_reasons.slice(0, 2).map((reason, index) => (
-                        <li key={index} className="flex items-start">
-                          <span className="text-purple-400 mr-2">•</span>
-                          {reason}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  
-                  {movie.streaming_services && Array.isArray(movie.streaming_services) && movie.streaming_services.length > 0 && (
-                    <div className="border-t border-white/20 pt-4">
-                      <p className="text-gray-400 text-xs mb-2">Available on:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {movie.streaming_services.slice(0, 2).map((service) => (
-                          <span
-                            key={service}
-                            className="px-2 py-1 bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-white text-xs rounded-lg border border-purple-500/30"
-                          >
-                            {service}
-                          </span>
-                        ))}
+                  <div className="p-6">
+                    <h3 className="text-xl font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">
+                      {movie.title || movie.original_title || 'Unknown'}
+                    </h3>
+                    
+                    <div className="flex items-center text-gray-400 text-sm mb-3">
+                      <span>{movie.release_date?.split('-')[0] || 'Unknown'}</span>
+                      <span className="mx-2">•</span>
+                      <Clock className="w-4 h-4 mr-1" />
+                      <span>{movie.runtime ? `${movie.runtime}m` : '0m'}</span>
+                    </div>
+                    
+                    <div className="flex items-center mb-3">
+                      <Star className="w-4 h-4 text-yellow-500 mr-1" />
+                      <span className="text-white font-medium">{movie.vote_average || 'N/A'}</span>
+                      <span className="text-gray-400 ml-2">IMDb</span>
+                      <div className="ml-auto">
+                        <span className="text-purple-400 text-sm font-medium">
+                          {item.score || 0}% match
+                        </span>
                       </div>
                     </div>
-                  )}
+                    
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {movie.genres && Array.isArray(movie.genres) && movie.genres.slice(0, 2).map((genre) => (
+                        <span
+                          key={genre}
+                          className="px-2 py-1 bg-white/20 text-white text-xs rounded-full"
+                        >
+                          {genre}
+                        </span>
+                      ))}
+                    </div>
+                    
+                    <p className="text-gray-300 text-sm mb-4 line-clamp-3">
+                      {movie.overview || 'No description available'}
+                    </p>
+                    
+                    <div className="mb-4">
+                      <p className="text-purple-400 text-sm font-medium mb-2 flex items-center">
+                        <Zap className="w-4 h-4 mr-1" />
+                        Why this matches:
+                      </p>
+                      <ul className="text-gray-300 text-xs space-y-1">
+                        {item.match_reasons && Array.isArray(item.match_reasons) && item.match_reasons.slice(0, 2).map((reason, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="text-purple-400 mr-2">•</span>
+                            {reason}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    {item.streaming_services && Array.isArray(item.streaming_services) && item.streaming_services.length > 0 && (
+                      <div className="border-t border-white/20 pt-4">
+                        <p className="text-gray-400 text-xs mb-2">Available on:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {item.streaming_services.slice(0, 2).map((service) => (
+                            <span
+                              key={service}
+                              className="px-2 py-1 bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-white text-xs rounded-lg border border-purple-500/30"
+                            >
+                              {service}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       ) : analysis && (
